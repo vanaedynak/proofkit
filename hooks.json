@@ -1,0 +1,34 @@
+{
+  "proofkit-session": {
+    "SessionStart": [
+      {
+        "type": "command",
+        "command": "node scripts/gate.mjs session-start",
+        "timeout": 10
+      }
+    ]
+  },
+  "proofkit-stop-gate": {
+    "Stop": [
+      {
+        "type": "command",
+        "command": "node scripts/gate.mjs stop",
+        "timeout": 20
+      }
+    ]
+  },
+  "proofkit-oneline": {
+    "PreToolUse": [
+      {
+        "matcher": "run_command",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node scripts/gate.mjs pretool",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}
