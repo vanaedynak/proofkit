@@ -2,7 +2,7 @@
 name: design-quality
 description: >-
   Use for ANY work that changes how a UI looks: a new app/site/screen, a theme or redesign, a new
-  component, or even a small UI fix inside an existing product (player, reader, dashboard). Two modes:
+  logo or app icon, a new component, or even a small UI fix inside an existing product (player, reader, dashboard). Two modes:
   PRESERVE (editing an existing product — keep its design system intact, prove nothing else changed
   with before/after visual diff) and CREATE (new design or explicit redesign — 2026 product-level
   quality, no generic "AI slop" look). Includes an anti-slop list and a scored self-critique.
@@ -44,6 +44,11 @@ that got damaged by a "fix", is a failed task even if everything works.
 
 ## CREATE mode (new design / redesign)
 
+0. **Directions before code.** Make 2–3 clearly different directions for ONE key screen first — as a
+   static HTML mockup or an image from your image tool — screenshot them side by side, score them with
+   the self-critique table, and pick the best (or show them to the user with `ask_question` when the
+   choice is a matter of taste, e.g. a new theme or logo). Changing a mockup costs a minute; changing
+   a theme across 30 screens costs an hour.
 1. **Direction in 5 lines** (in `.proof/checklist.md`): who uses it and in what mood; 2–3 concrete
    current references to emulate *for specific qualities* (e.g. "Apple TV app — poster rows & focus
    states; Linear — density & restraint; Arc/Raycast — command UX; Spotify 2025 — now-playing view;
@@ -61,6 +66,35 @@ that got damaged by a "fix", is a failed task even if everything works.
 5. **Layout**: one dominant element per screen, clear hierarchy, generous but consistent spacing,
    content aligned to a grid; on iPad/phone — native-feeling: safe areas, ≥ 44 px touch targets,
    bottom/edge-reachable controls, no hover-only actions.
+
+## Themes and redesigns of an existing app — check EVERY screen
+
+A theme touches every screen, so checking the 2–3 you edited is not enough:
+1. Take the screen list from the project map (routes + how to get past login/guest screens).
+2. Before changing anything: `node <proof-verify>/scripts/route_tour.mjs --url <dev-url> --routes .proof/routes.txt
+   [--hash] [--setup setup.json] --viewports 1440x900,ipad,375x812 --freeze --out .proof/tour/before`
+   (run it twice: screens that differ between the two runs show live data — judge those by eye).
+3. After: same command with `--out .proof/tour/after`, then `visual_diff.mjs .proof/tour/before .proof/tour/after`.
+   Open the diffs of every screen: the new theme must be applied everywhere consistently — no screen left
+   in the old colours, no unreadable text, no broken layout.
+4. `ui_probe.mjs` reports `low-contrast` text. In an existing product only contrast problems YOUR change
+   introduced count (compare with the before run); do not recolour the brand's existing elements unless
+   the task is to change the theme.
+
+## Icons and logos
+
+An icon is seen at 16–64 px far more often than at 1024 px.
+1. Make 3–4 genuinely different candidates (SVG by hand for geometric marks, or your image tool), each
+   one simple: one bold silhouette, ≤ 3 colours, no thin lines, no small text, works without its glow.
+2. Check each: `node <proof-verify>/scripts/icon_check.mjs candidate.svg --label v1` — open every sheet:
+   recognisable at 16 and 32 px? visible on dark AND light? holds up next to other icons on the iPad
+   home screen? Fix or drop candidates that fail, pick the best, say why.
+3. Export everything: `icon_check.mjs final.svg --export <dir> --ios-bg <brand background>` → `.ico` for
+   Windows/Electron, `AppIcon-1024.png` (opaque, square full-bleed — iOS applies its own rounded mask),
+   `apple-touch-icon.png`, favicon, maskable PWA icon, PNG sizes.
+4. Wire it into EVERY place the project uses (find them: `rg -n "icon|favicon|apple-touch" --glob "!node_modules"`):
+   favicon/manifest in `public/`, Electron build icon, Capacitor/iOS asset catalog, in-app logo components,
+   splash screens. Old icon files left in some place = the user still sees the old icon there.
 
 ## Anti-slop list — never ship these (they scream "AI made this")
 

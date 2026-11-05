@@ -66,6 +66,20 @@ function sessionStart(input, state) {
       `.proof/project-map.md following the template ${MAP_TEMPLATE} — it is reused by every future task, so ` +
       `later fixes start instantly. Then do the task.`;
   }
+  // lessons learned in this project and an unfinished plan travel with the map
+  const lessons = path.join(ws, '.proof', 'lessons.md');
+  if (fs.existsSync(lessons)) text += `
+
+[proofkit] LESSONS from earlier tasks in this project (.proof/lessons.md) — obey them:
+` + fs.readFileSync(lessons, 'utf8').slice(-4000);
+  const plan = path.join(ws, '.proof', 'plan.md');
+  if (fs.existsSync(plan)) {
+    const p = fs.readFileSync(plan, 'utf8');
+    if (/\[ \]/.test(p)) text += `
+
+[proofkit] An UNFINISHED PLAN exists (.proof/plan.md). If the user's request continues that work, resume from the first open milestone:
+` + p.slice(0, 3000);
+  }
   return { injectSteps: [{ systemMessage: { systemMessage: text } }] };
 }
 

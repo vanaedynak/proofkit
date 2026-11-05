@@ -8,7 +8,7 @@
 //   --out <folder>        where to write report.json + screenshots (default: ./.proof/ui)
 //   --steps <file.json>   scripted scenario to run (see SKILL.md "Scenario steps")
 //   --click-all           click every visible button and report buttons that change nothing / throw
-//   --viewports 1440x900,768x1024,375x812
+//   --viewports 1440x900,768x1024,375x812   (presets with touch: ipad, ipad-portrait, phone, desktop)
 //   --wait <ms>           extra wait after load (default 500)
 //   --freeze              disable CSS animations/transitions (stable before/after shots for visual_diff.mjs)
 //
@@ -21,9 +21,12 @@ import path from 'node:path';
 
 const args = parseArgs(process.argv.slice(2));
 const OUT = path.resolve(args.out || '.proof/ui');
+// sizes or presets; presets emulate touch devices (ipad = iPad Air 11" landscape, ipad-portrait, phone)
+const PRESETS = { ipad: [1180, 820, true], 'ipad-portrait': [820, 1180, true], phone: [390, 844, true], desktop: [1440, 900, false] };
 const VIEWPORTS = (args.viewports || '1440x900,768x1024,375x812').split(',').map(v => {
-  const [w, h] = v.split('x').map(Number);
-  return { width: w, height: h, name: `${w}x${h}` };
+  const p = PRESETS[v.trim()];
+  const [w, h] = p ? p : v.split('x').map(Number);
+  return { width: w, height: h, touch: !!(p && p[2]), name: p ? `${v.trim()}-${w}x${h}` : `${w}x${h}` };
 });
 const WAIT = Number(args.wait ?? 500);
 
@@ -65,7 +68,15 @@ async function launch() {
 }
 
 const report = { url: null, problems: [], viewports: {}, steps: null, clickAll: null };
-const problem = (kind, detail, where) => report.problems.push({ kind, where, detail });
+const problem = (kind, detail, where) => {
+  if (kind === 'low-contrast') {   // the same badge/button repeats on every card: report it once with a count
+    const key = detail.replace(/\s*—.*$/, '');
+    const prev = report.problems.find(p => p.kind === kind && p.key === key);
+    if (prev) { prev.count = (prev.count || 1) + 1; return; }
+    return report.problems.push({ kind, where, detail, key });
+  }
+  report.problems.push({ kind, where, detail });
+};
 
 let server = null;
 let browser = null;
@@ -97,6 +108,7 @@ try {
     for (const t of layout.tiny) problem('tiny-control', `"${t.label}" is only ${t.w}x${t.h}px`, vp.name);
     for (const c of layout.clipped) problem('clipped-control', `"${c.label}" is partly outside the viewport (${JSON.stringify(c.rect)})`, vp.name);
     for (const t of layout.clippedText) problem('clipped-text', `"${t.label}" (${t.el}) does not fit its box by ${t.overflowPx}px — text is cut off or spills out`, vp.name);
+    for (const t of layout.lowContrast) problem('low-contrast', `"${t.label}" (${t.el}, ${t.size}px) contrast ${t.ratio}:1, needs ≥ ${t.need}:1 — hard to read`, vp.name);
     for (const l of page._log) problem(l.type, l.text, vp.name);
     await page.close();
   }
@@ -117,7 +129,7 @@ process.exit(report.fatal ? 2 : report.problems.length ? 1 : 0);
 // ---------------------------------------------------------------------------
 
 async function newPage(vp) {
-  const ctx = await browser.newContext({ viewport: { width: vp.width, height: vp.height }, deviceScaleFactor: 1 });
+  const ctx = await browser.newContext({ viewport: { width: vp.width, height: vp.height }, deviceScaleFactor: 1, hasTouch: !!vp.touch, isMobile: !!vp.touch && vp.width < 700 });
   await ctx.addInitScript(sceneHook);
   if (args.freeze) await ctx.addInitScript(() => document.addEventListener('DOMContentLoaded', () => {   // deterministic screenshots for visual_diff
     const st = document.createElement('style'); st.textContent = '*,*::before,*::after{animation:none!important;transition:none!important;caret-color:transparent!important}';
@@ -303,7 +315,40 @@ function inspectLayout() {
     if (!main || r.width * r.height > main.area) main = { el: sel(el), w: Math.round(r.width), h: Math.round(r.height), area: r.width * r.height };
   }
   if (main) { main.widthShare = +(main.w / vw).toFixed(2); main.heightShare = +(main.h / vh).toFixed(2); }
+  // text contrast (WCAG): only where the background behind the text is a solid colour we can resolve
+  const lowContrast = [];
+  const rgba = c => { const m = c.match(/rgba?\(([^)]+)\)/); if (!m) return null; const [r, g, b, a = 1] = m[1].split(/[ ,/]+/).filter(Boolean).map(Number); return [r, g, b, a]; };
+  const lum = ([r, g, b]) => { const f = v => (v /= 255) <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b); };
+  const blend = (top, bot) => [0, 1, 2].map(i => top[i] * top[3] + bot[i] * (1 - top[3])).concat(1);
+  const bgOf = el => {
+    const layers = [];
+    for (let e = el; e; e = e.parentElement) {
+      const st = getComputedStyle(e);
+      if (st.backgroundImage !== 'none' || /^(IMG|VIDEO|CANVAS)$/.test(e.tagName) || st.backdropFilter !== 'none' && st.backdropFilter) return null;   // gradient/image/blur: unknown
+      const c = rgba(st.backgroundColor);
+      if (c && c[3] > 0) { layers.push(c); if (c[3] >= 0.99) break; }
+    }
+    let bg = [255, 255, 255, 1];
+    for (let i = layers.length - 1; i >= 0; i--) bg = blend(layers[i], bg);
+    return bg;
+  };
+  const seenC = new Set();
+  const tw2 = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+  for (let n; (n = tw2.nextNode()) && lowContrast.length < 12;) {
+    const el = n.parentElement;
+    if (!el || seenC.has(el) || !n.textContent.trim() || !visible(el) || el.closest('[disabled],[aria-disabled=true]')) continue;
+    seenC.add(el);
+    const st = getComputedStyle(el), fg = rgba(st.color); if (!fg || parseFloat(st.opacity) < 0.1) continue;
+    const bg = bgOf(el); if (!bg) continue;
+    let op = 1; for (let e = el; e; e = e.parentElement) op *= parseFloat(getComputedStyle(e).opacity);
+    const f = blend([fg[0], fg[1], fg[2], fg[3] * op], bg);
+    const L1 = lum(f), L2 = lum(bg), ratio = (Math.max(L1, L2) + 0.05) / (Math.min(L1, L2) + 0.05);
+    const px = parseFloat(st.fontSize), bold = parseInt(st.fontWeight) >= 600, large = px >= 24 || (px >= 18.6 && bold);
+    const need = large ? 3 : 4.5;
+    if (ratio < need) lowContrast.push({ label: n.textContent.trim().slice(0, 40), el: sel(el), ratio: +ratio.toFixed(2), need, size: Math.round(px) });
+  }
   return {
+    lowContrast,
     horizontalOverflow: document.documentElement.scrollWidth - vw,
     overflowing, covered, tiny, clipped, clippedText: clippedText.slice(0, 15), mainVisual: main, controls: list,
     title: document.title,
@@ -380,6 +425,7 @@ async function runSteps(steps) {
       if (step.screenshot || step.inspect) {  // re-run layout checks in this state (modals, game screen, ...)
         const lay = await page.evaluate(inspectLayout);
         for (const t of lay.clippedText) problem('clipped-text', `"${t.label}" (${t.el}) cut off by ${t.overflowPx}px`, `step ${i}: ${name}`);
+        for (const t of lay.lowContrast) problem('low-contrast', `"${t.label}" (${t.el}, ${t.size}px) contrast ${t.ratio}:1, needs ≥ ${t.need}:1 — hard to read`, `step ${i}: ${name}`);
         for (const c of lay.covered) problem('covered-control', `"${c.label}" covered by ${c.coveredBy}`, `step ${i}: ${name}`);
         if (lay.horizontalOverflow > 1) problem('horizontal-overflow', `${lay.horizontalOverflow}px`, `step ${i}: ${name}`);
         const m = lay.mainVisual, vpw = page.viewportSize().width;
@@ -475,7 +521,7 @@ function printSummary() {
   if (report.steps) out.push(`  scenario: ${report.steps.filter(s => s.ok).length}/${report.steps.length} steps passed`);
   if (report.clickAll) out.push(`  click-all: ${report.clickAll.length} buttons clicked`);
   out.push(report.problems.length ? `PROBLEMS (${report.problems.length}):` : 'No problems detected.');
-  for (const p of report.problems.slice(0, 60)) out.push(`  - [${p.kind}] (${p.where}) ${p.detail}`);
+  for (const p of report.problems.slice(0, 60)) out.push(`  - [${p.kind}] (${p.where}) ${p.detail}${p.count ? ` (×${p.count})` : ''}`);
   for (const n of report.notes || []) out.push(`  note: ${n}`);
   out.push(`Full report: ${path.join(OUT, 'report.json')}`);
   console.log(out.join('\n'));

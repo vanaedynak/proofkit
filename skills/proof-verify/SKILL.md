@@ -119,6 +119,17 @@ screenshot every screen/modal (menu, game, pause, game over, settings, mobile) t
 **Treat every reported problem as a bug to fix**, then re-run until the probe exits 0 (or explain in the
 report why a remaining item is intentional).
 
+Viewport presets with touch emulation: `--viewports 1440x900,ipad,ipad-portrait,phone`. The probe also
+reports `low-contrast` text (WCAG ratio, solid backgrounds only; repeats are counted once).
+
+**Every screen at once** (themes, redesigns, upgrades, "don't break anything"): `scripts/route_tour.mjs`
+screenshots every route from a list (`--routes .proof/routes.txt`, `--hash` for hash routers, `--setup` to
+pass a login/guest screen, `--storage` for test data) and reports JS errors / failed requests / overflow per
+route; it warns when all screens look identical (a gate you did not pass). Before/after + `visual_diff.mjs`
+shows exactly which screens changed. **App icons/logos**: `scripts/icon_check.mjs` (sizes 16–256 on light and
+dark, taskbar, browser tab, iPad home screen, detail kept at 16/32 px; `--export` writes .ico, iOS 1024,
+favicon, PWA icons) — process in the `design-quality` skill.
+
 **Always write a scenario** (`.proof/steps.json`) that walks the user's actual features with real
 data (a page with no content hides most bugs). All step keys (click, fill, press, setFiles, hold,
 mouseMove, filmstrip, fps, scene3d, expect, expectChange, screenshot, …), their order and an example:

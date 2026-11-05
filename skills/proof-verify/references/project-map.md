@@ -15,6 +15,7 @@ adds a screen/module or you find a section is wrong, fix that line.
 4. The entry points: router/routes file, main layout/navigation, app root, global store, theme/tokens
    file, API/client layer, platform layer (Electron/Capacitor/etc.).
 5. Skim 3–5 main screens just enough to say what each does and which shared pieces it uses.
+6. Write `.proof/routes.txt` (one route per line) — `route_tour.mjs` uses it to screenshot every screen.
 Do not read every file. Use `grep_search` to answer "where is X".
 
 ## Template
@@ -42,6 +43,11 @@ Updated: <date> · by: <agent> · verify with: <the command that runs/builds it>
 |---|---|---|---|
 | Watch anime | /watch/:alias/:ordinal | pages/Watch.tsx, components/Player.tsx | fullscreen + status bar in lib/platform.ts |
 | …
+
+## Screens for route_tour (every route, with real ids for detail pages)
+- Router: <hash or path>; get past the gate with: <e.g. [{"click":"text=Смотреть как гость"}]>
+- Routes: `/`, `/catalog`, `/title/<real-alias>`, `/settings`, …  (also saved as `.proof/routes.txt`)
+- Target devices: <desktop / iPad / phone> → ui_probe `--viewports 1440x900,ipad,ipad-portrait,phone`
 
 ## Shared building blocks (reuse these instead of writing new ones)
 - Hooks/helpers: <name — what it does — file>

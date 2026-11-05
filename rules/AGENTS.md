@@ -70,5 +70,15 @@ When unsure between two sizes, pick the smaller one and grow only if the work pr
    After invoking, wait for its message — do not poll `manage_subagents` more often than every 2 min.
 9. **Games** are verified by playing (held keys, filmstrips, new-player test, fps, 3D telemetry), and
    moving parts of 3D models need hinge pivots (`blender_rig_check.py`). See `proof-verify` → Games.
+10. **Size L — plan with milestones** in `.proof/plan.md`: 3–7 milestones, each with how it is verified
+   and a status `[ ]`/`[x]`. Build ONE complete vertical slice first (one screen/level fully working and
+   verified), then the rest. Tick milestones as they pass. If a plan with open milestones was injected at
+   the start, continue it instead of starting over.
+11. **Remember lessons.** When the user corrects you ("not like that", "you broke X") or the reviewer
+   finds a defect that a rule could have prevented, append one line to `.proof/lessons.md`:
+   `- <date>: <what went wrong> → <what to do instead>`. Lessons are injected into every future task in
+   this project — read and obey them.
+12. **Real devices of the project.** If the project map lists iPad/phone/desktop targets, verify on those:
+   `ui_probe.mjs --viewports 1440x900,ipad,ipad-portrait,phone` (presets emulate touch).
 
 A `Stop` hook checks for a fresh `.proof/report.md`; for size S it also checks the diff size.
