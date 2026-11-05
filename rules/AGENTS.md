@@ -42,7 +42,7 @@ When unsure between two sizes, pick the smaller one and grow only if the work pr
    `StatusBar.hide()`, a component prop, an existing helper in the project). If your fix is growing past **~30 changed lines, stop**, discard that approach and search
    again for a 1–5 line native solution (docs: `npx ctx7@latest`, web search). Only if none exists, write
    the bigger fix and explain in the report why it had to be bigger.
-3. **Change nothing else**: no refactors, renames, reformatting, new hotkeys/settings/features, no edits to
+3. **Change nothing else**: never `git commit`/`push`/switch branches unless the user asks; no refactors, renames, reformatting, new hotkeys/settings/features, no edits to
    generated files, lockfiles or line endings. `git diff` must show only your intended lines.
 4. **Verify just that**: reproduce the bug or the case → fix → show it is fixed (test, screenshot, or a
    small script) + build/typecheck passes + for UI a before/after `visual_diff.mjs` of the touched screen.
