@@ -1,6 +1,6 @@
 {
   "name": "proofkit",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "private": true,
   "description": "Makes AI coding agents launch, click through and verify what they build.",
   "license": "MIT",

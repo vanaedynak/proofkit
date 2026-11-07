@@ -1,6 +1,6 @@
 {
   "name": "proofkit",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Makes the agent launch, click through and verify what it builds (real-browser UI probe, scenario runner, per-project recipes) and blocks finishing without a verification report.",
   "author": "vanaedynak",
   "logo": "assets/logo.svg"

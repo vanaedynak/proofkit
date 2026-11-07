@@ -74,12 +74,17 @@ presentation, a data pipeline, a hardware script, something nobody has built). T
 
 - Run Python tools as modules: `python -m pytest`, `python -m uvicorn app:app`, `python -m pip install …`,
   `python -m http.server 8000` — not bare `pytest`/`uvicorn` (PATH issues; may also be blocked).
-- Node tools via `npx …` / `npm run …`. Start servers with your tool's background/async option, then
-  poll the URL until it answers; stop them when done.
+- Node tools via `npx …` / `npm run …`.
+- **Server + test script → `scripts/with_server.mjs`**, never `spawn()` a server inside your own script
+  (on Windows `child.kill()` leaves the real server running, your script never exits, the task hangs
+  for hours): `node <this skill>/scripts/with_server.mjs --serve "npx vite preview --port 5577 --strictPort"
+  --cwd app --port 5577 -- node .proof/tmp/snap.mjs`. It waits for the port, runs, kills the server tree, exits.
 - **Every command is ONE line** — never put several commands on separate lines in one call (newlines
   make the whole call get refused). One command per call, or join with `;` on a single line.
-- Long checks (mc_test, Blender renders, servers): run in the background and wait with your
-  `command_status` tool. Do NOT poll with PowerShell `if (…) { … }` / loops — they are refused.
+- **Never end your turn "waiting for a background task"** — nothing wakes you until it exits. If a
+  command went to the background, check it: `Start-Sleep -Seconds 30; Get-Content "<task log>" -Tail 15`.
+  Log says done but the task still runs → it is hung: `Get-NetTCPConnection -LocalPort <port> -State Listen
+  | ForEach-Object { taskkill /PID $_.OwningProcess /T /F }`, then continue. No `if (…) { … }` loops.
 - The skill's scripts always exist at the paths shown — don't spend calls checking them with Test-Path.
 - Any code longer than one line goes into a file (`.proof/check_crypto.mjs`, `tests/test_x.py`) and is
   run with `node file` / `python file`. Multi-line `node -e "…"` / `python -c "…"` are blocked.

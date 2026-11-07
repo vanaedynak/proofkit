@@ -85,6 +85,8 @@ function sessionStart(input, state) {
 
 function stop(input, state) {
   if (input.terminationReason && input.terminationReason !== 'NO_TOOL_CALL') return {};
+  const hung = pendingTask(input.transcriptPath, state);
+  if (hung) return hung;
   const ws = (input.workspacePaths || [])[0];
   if (!ws || !fs.existsSync(ws)) return {};
 
@@ -238,6 +240,42 @@ function pretool(input) {
     return { decision: 'ask' };
   }
   return { decision: 'ask', reason: 'proofkit: rewrote multi-line command to a single line', overwrite: { CommandLine: next } };
+}
+
+// The agent ends its turn with "waiting for the background task to finish" — but nothing wakes it until
+// that process exits, and a test script that spawned a server (`spawn('cmd', ['/c','npx vite preview'])`)
+// never exits on Windows: child.kill() kills only the wrapper, the server keeps the script alive.
+// The user then waits for hours. So: never let the turn end while the last background task is unfinished.
+function pendingTask(transcriptPath, state) {
+  if (!transcriptPath || !fs.existsSync(transcriptPath)) return null;
+  let text;
+  try { text = fs.readFileSync(transcriptPath, 'utf8'); } catch { return null; }
+  const starts = [...text.matchAll(/running as a background task with task id: ([\w./-]+)/g)];
+  if (!starts.length) return null;
+  const last = starts[starts.length - 1], id = last[1], after = text.slice(last.index);
+  const esc = id.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
+  if (new RegExp(`Task id \\\\?"${esc}\\\\?" finished`).test(after)) return null;
+  if (/background tasks have been stopped/.test(after)) return null;
+  state.waited ??= {};
+  state.waited[id] = (state.waited[id] || 0) + 1;
+  if (state.waited[id] > 3) return null;   // don't loop forever
+  const logUrl = (after.match(/Task logs are available at: (file:\/\/\/[^\s"\\]+)/) || [])[1];
+  let logPath = '', tail = '';
+  try { logPath = fileURLToPath(logUrl); tail = fs.readFileSync(logPath, 'utf8').slice(-600); } catch {}
+  const desc = (after.match(/Task Description: ([^\n\\]+)/) || [])[1] || id;
+  const ports = [...new Set([...after.slice(0, 4000).matchAll(/(?:port[ =:]+|localhost:)(\d{4,5})/gi)].map(m => m[1]))].slice(0, 3);
+  return {
+    decision: 'continue',
+    reason: `[proofkit] Do NOT end your turn "waiting for the task": nothing will wake you until that process exits, ` +
+      `and the user is left waiting. Background task "${desc}" is still running. Its log ${logPath ? `(${logPath}) ` : ''}ends with:\n` +
+      `${tail.trim() || '(empty)'}\n` +
+      `- If the log shows the work is DONE (e.g. "finished", screenshots saved) the process is HUNG — a server it spawned keeps it ` +
+      `alive. Stop it: ${ports.length ? ports.map(p => `Get-NetTCPConnection -LocalPort ${p} -State Listen | ForEach-Object { taskkill /PID $_.OwningProcess /T /F }`).join(' ; ') + ' ; ' : ''}` +
+      `then continue with the results. Next time run such scripts through ` +
+      `${fileURLToPath(new URL('../skills/proof-verify/scripts/with_server.mjs', import.meta.url))} (starts and stops the server for you).\n` +
+      `- If it is genuinely still working (a build, a render), wait INSIDE one command: \`Start-Sleep -Seconds 30; Get-Content "${logPath || '<log>'}" -Tail 15\`, ` +
+      `repeat until it ends (max ~10 min), then continue the task.`,
+  };
 }
 
 // Changed lines (added + deleted) and files in the working tree vs HEAD, ignoring .proof/. No git → zeros.

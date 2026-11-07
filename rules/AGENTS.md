@@ -81,4 +81,10 @@ When unsure between two sizes, pick the smaller one and grow only if the work pr
 12. **Real devices of the project.** If the project map lists iPad/phone/desktop targets, verify on those:
    `ui_probe.mjs --viewports 1440x900,ipad,ipad-portrait,phone` (presets emulate touch).
 
+13. **Every command must end by itself, and you never end a turn "waiting for it".** Nothing wakes you
+   while a background task runs, so a hung task = the user waits for hours. Server + test script: run
+   through `proof-verify/scripts/with_server.mjs` (never spawn a server inside your own script). If a
+   task's log says done but it is still running, kill its server by port and continue (`proof-verify` →
+   Running commands).
+
 A `Stop` hook checks for a fresh `.proof/report.md`; for size S it also checks the diff size.
