@@ -6,7 +6,7 @@
 Запустить, прокликать, сыграть, сравнить с референсом, честно отчитаться и только потом сказать «готово».</p>
 
 <p align="center">
-Antigravity 2.0 · agy CLI · Claude Code · Codex CLI · OpenCode · Gemini CLI
+Antigravity 2.0 · agy CLI · OpenCode · Claude Code · Codex CLI · Gemini CLI
 </p>
 
 > **English, in short:** proofkit is a plugin/skill pack that makes coding agents (built and tuned on Gemini 3.8 Flash
@@ -14,7 +14,8 @@ Antigravity 2.0 · agy CLI · Claude Code · Codex CLI · OpenCode · Gemini CLI
 > screenshots, game playtesting (held keys, filmstrips, fps, 3D telemetry), visual before/after diffs, Blender
 > renders and rig checks, a real Minecraft test server with a bot, an independent reviewer subagent, task sizing
 > (fast path for small fixes), an automatic project map, and a design-quality skill against generic "AI slop" UIs.
-> Install: `git clone … && node install.mjs`. See the sections below for other agents.
+> Install: `git clone … && node install.mjs` (Antigravity) or `node install.mjs --agent opencode` (OpenCode — full
+> version with the lifecycle plugin and the reviewer subagent). See below for other agents.
 
 ---
 
@@ -54,15 +55,14 @@ Antigravity 2.0 · agy CLI · Claude Code · Codex CLI · OpenCode · Gemini CLI
 | **Google Antigravity 2.0 / agy CLI** | **всё**: правила, скиллы, хуки (шлагбаум, карта проекта, починка команд), субагент-ревьюер | `node install.mjs` |
 | **Claude Code** | скиллы + инструменты; правила по желанию (`--rules` → `~/.claude/CLAUDE.md`) | `node install.mjs --agent claude` |
 | **Codex CLI** | скиллы + инструменты; правила по желанию (`~/.codex/AGENTS.md`) | `node install.mjs --agent agents` |
-| **OpenCode** | скиллы + инструменты; правила по желанию (`~/.config/opencode/AGENTS.md`) | `node install.mjs --agent agents` |
+| **OpenCode** | **всё**: правила, скиллы, плагин (шлагбаум, карта проекта), субагент-ревьюер — с любой моделью (DeepSeek, GLM, Claude, GPT…) | `node install.mjs --agent opencode` |
 | **Gemini CLI** | скиллы + инструменты; правила по желанию (`~/.gemini/GEMINI.md`) | `node install.mjs --agent agents` |
 
-Скиллы — открытый формат `SKILL.md`: Codex, OpenCode и Gemini CLI читают общую папку `~/.agents/skills`,
-Claude Code — `~/.claude/skills`. Инструменты (`ui_probe`, `visual_diff`, `compare`, Blender- и Minecraft-скрипты) —
-обычные Node/Python-скрипты и работают с любым агентом. **Хуки и субагент написаны в формате Antigravity**: в других
-агентах шлагбаума нет, а ревьюера можно попросить словами («проверь результат как независимый тестировщик по
-`agents/playtester.md`») или перенести файл в папку агентов своего инструмента (у Claude Code — `~/.claude/agents/`,
-поменяв названия инструментов).
+Полная версия есть для **Antigravity** и **OpenCode**: в обоих работают хуки/плагин (шлагбаум, карта проекта), правила и
+субагент-ревьюер. Установщик сам переводит названия инструментов под каждый агент (`view_file` → `read`,
+`invoke_subagent` → `task` и т. д.) и подставляет правильные советы по командам (в Antigravity — PowerShell, в OpenCode — bash).
+Для Claude Code, Codex и Gemini CLI ставятся скиллы, инструменты и, по желанию, правила; ревьюера там можно попросить
+словами («проверь результат как независимый тестировщик по `agents/playtester.md`»).
 
 ## Установка
 
@@ -72,15 +72,50 @@ Claude Code — `~/.claude/skills`. Инструменты (`ui_probe`, `visual_
 ```bash
 git clone https://github.com/vanaedynak/proofkit.git
 cd proofkit
-node install.mjs                       # Antigravity 2.0 / agy CLI
 ```
 
-Другие агенты:
+### Antigravity 2.0 / agy CLI
+
+```bash
+node install.mjs
+```
+
+Потом **перезапусти Antigravity**. Проверить: Antigravity → Customizations → плагин `proofkit` включён (или `agy plugin list`).
+
+### OpenCode
+
+```bash
+node install.mjs --agent opencode
+```
+
+Потом **перезапусти OpenCode** (закрой и открой TUI / приложение). Дальше как обычно: открой папку проекта
+(`cd мой-проект && opencode`), выбери модель (`/models`, например `opencode/deepseek-v4.1-flash-free`) и давай задачи.
+Проверить, что всё подхватилось: спроси «какие у тебя есть скиллы и субагенты?» — в ответе должны быть
+`proof-verify`, `design-quality` и `playtester`.
+
+Что ставится (глобально, для всех проектов):
+
+| Файл | Зачем |
+|---|---|
+| `~/.config/opencode/AGENTS.md` | правила (в блоке `proofkit:start … proofkit:end`, остальное в файле не трогается) |
+| `~/.config/opencode/skills/<skill>/` | скиллы и инструменты (`ui_probe`, `route_tour`, `visual_diff`, …) |
+| `~/.config/opencode/agents/playtester.md` | субагент-ревьюер (вызывается инструментом `task`) |
+| `~/.config/opencode/plugins/proofkit.js` | плагин: карта проекта и уроки в начале сессии, шлагбаум в конце |
+| `~/.config/opencode/proofkit/gate.mjs` | логика шлагбаума (общая с Antigravity) |
+
+Шлагбаум в OpenCode: когда модель заканчивает, плагин проверяет `.proof/report.md`, открытые скриншоты и размер мелкого
+фикса; если чего-то не хватает — отправляет модели одно сообщение «доделай вот это» (той же моделью и тем же агентом).
+Ещё плагин блокирует команды, которые запускают сервер прямо в вызове `bash` (`npm run dev`, `npx vite`, `python -m http.server`…):
+такой вызов никогда не завершается, и модель висит. Вместо этого она получает подсказку про `with_server.mjs`.
+Шлагбаум работает в интерфейсе OpenCode (TUI, приложение, `opencode serve`); `opencode run` выходит сразу, как модель замолчала,
+и продолжения не ждёт.
+
+### Другие агенты
 
 ```bash
 node install.mjs --agent claude        # Claude Code
-node install.mjs --agent agents        # Codex CLI, OpenCode, Gemini CLI
-node install.mjs --agent all --rules   # всё сразу + добавить правила в глобальные файлы инструкций
+node install.mjs --agent agents        # Codex CLI, Gemini CLI
+node install.mjs --agent all --rules   # Antigravity + Claude Code + Codex/Gemini CLI + правила в их файлах инструкций
 ```
 
 Дополнительно:
@@ -91,14 +126,12 @@ node install.mjs --dry-run             # только показать, что �
 node install.mjs --dir D:/my/plugins/proofkit   # своя папка для плагина Antigravity
 ```
 
-После установки **перезапусти Antigravity** (или открой новый терминал для CLI). Проверить: в Antigravity →
-Customizations должен быть включён плагин `proofkit`, или `agy plugin list`.
-
 Куда что ставится:
 
 - Antigravity: `~/.gemini/config/plugins/proofkit/` (на Windows `C:\Users\<ты>\.gemini\config\plugins\proofkit\`)
 - Claude Code: `~/.claude/skills/<skill>/`
-- Codex / OpenCode / Gemini CLI: `~/.agents/skills/<skill>/`
+- OpenCode: `~/.config/opencode/` (см. таблицу выше)
+- Codex / Gemini CLI: `~/.agents/skills/<skill>/`
 - Minecraft-инструменты: `~/.proofkit-tools/mc/` (или путь из переменной `PROOFKIT_MC_TOOLS`)
 
 Правила (`--rules`) добавляются в файл инструкций в блоке `<!-- proofkit:start --> … <!-- proofkit:end -->`;
@@ -115,6 +148,8 @@ node install.mjs        # с теми же флагами, что и в перв
 ### Удаление
 
 - Antigravity: удалить папку `~/.gemini/config/plugins/proofkit` (или `agy plugin disable proofkit`).
+- OpenCode: удалить `~/.config/opencode/plugins/proofkit.js`, `~/.config/opencode/proofkit/`,
+  `~/.config/opencode/agents/playtester.md`, четыре папки скиллов из `~/.config/opencode/skills/` и блок правил из `~/.config/opencode/AGENTS.md`.
 - Скиллы: удалить папки `proof-verify`, `design-quality`, `systematic-debugging`, `test-driven-development`
   из `~/.claude/skills` / `~/.agents/skills`.
 - Правила: удалить блок `proofkit:start … proofkit:end` из файла инструкций.
@@ -163,6 +198,7 @@ proofkit/
 ├─ rules/AGENTS.md              правила, которые всегда в контексте
 ├─ agents/playtester.md         субагент-ревьюер
 ├─ scripts/gate.mjs             хуки: карта проекта на старте, шлагбаум на выходе, починка команд
+├─ opencode/                    адаптер для OpenCode: плагин proofkit.js + раздел про bash-команды
 ├─ skills/
 │  ├─ proof-verify/             главный скилл: метод проверки + рецепты + инструменты
 │  │  ├─ SKILL.md
@@ -192,7 +228,7 @@ proofkit/
 ## Ограничения (честно)
 
 - Сделано и проверено на **Windows**; скрипты кроссплатформенные, но на macOS/Linux пока не тестировались.
-- Полная версия (хуки, ревьюер, шлагбаум) — только для **Antigravity**. В остальных агентах — скиллы, инструменты и правила.
+- Полная версия (хуки, ревьюер, шлагбаум) — для **Antigravity** и **OpenCode**. В остальных агентах — скиллы, инструменты и правила.
 - Модель остаётся моделью: качество между прогонами немного плавает, а 3D по референсу — узнаваемо, но не копия.
 - Агент работает дольше, потому что реально проверяет. На мелких фиксах это минуты, на больших задачах — десятки минут.
 
